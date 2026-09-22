@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Uncontain: typed URLs leave the container",
-  "version": "1.0.0",
+  "version": "1.0.2-debug",
   "author": "Hadvar42",
   "description": "URLs you type in the address bar open in the default (no) container. Links, redirects and payment handovers stay inside the current container.",
   "browser_specific_settings": {

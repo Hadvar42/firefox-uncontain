@@ -43,11 +43,22 @@ const DEFAULTS = {
 
   // Ignore everything for this long after browser/extension start, so session
   // restore does not get scattered across the default container.
-  startupGraceMs: 20000,
+  startupGraceMs: 3000,
+
+  // Verbose logging to the extension console (about:debugging -> Inspect).
+  debug: true,
 };
 
 let cfg = { ...DEFAULTS };
 const startedAt = Date.now();
+
+function log(...a) {
+  if (cfg.debug) console.log("[uncontain]", ...a);
+}
+function skip(why, extra) {
+  log("skip:", why, extra === undefined ? "" : extra);
+  return null;
+}
 
 browser.storage.local.get("cfg").then((v) => {
   if (v && v.cfg) cfg = { ...DEFAULTS, ...v.cfg };
@@ -128,38 +139,43 @@ function isContainer(storeId) {
  * rather than something the page caused.
  */
 async function shouldBreakOut(d, pageInitiated, opts = {}) {
-  if (Date.now() - startedAt < cfg.startupGraceMs) return null;
-  if (d.tabId == null || d.tabId < 0) return null;
-  if (d.frameId !== 0) return null;
-  if (pageInitiated) return null;                       // link / form / redirect
-  if (d.method && d.method !== "GET") return null;      // POST is never "typed"
+  if (Date.now() - startedAt < cfg.startupGraceMs)
+    return skip("startup grace", `${Date.now() - startedAt}ms since load`);
+  if (d.tabId == null || d.tabId < 0) return skip("no tabId");
+  if (d.frameId !== 0) return skip("subframe");
+  if (pageInitiated)
+    return skip("page-initiated", `originUrl=${d.originUrl} documentUrl=${d.documentUrl}`);
+  if (d.method && d.method !== "GET") return skip("method", d.method);
 
   const target = stripRef(d.url);
-  if (!/^https?:/.test(target)) return null;
+  if (!/^https?:/.test(target)) return skip("scheme", target);
 
   const born = tabBorn.get(d.tabId);
-  if (born && Date.now() - born < cfg.newTabGraceMs) return null;  // MAC reopen etc.
+  if (born && Date.now() - born < cfg.newTabGraceMs)
+    return skip("new-tab grace", `${Date.now() - born}ms old`);  // MAC reopen etc.
 
   if (!opts.ignoreSeen) {
     const seen = tabSeen.get(d.tabId);
-    if (seen && seen.has(target)) return null;          // reload / back / forward
+    if (seen && seen.has(target)) return skip("already visited in tab", target);
   }
 
   let tab;
   try {
     tab = await browser.tabs.get(d.tabId);
-  } catch (_) {
-    return null;
+  } catch (e) {
+    return skip("tabs.get failed", String(e));
   }
-  if (!isContainer(tab.cookieStoreId)) return null;
+  if (!isContainer(tab.cookieStoreId)) return skip("tab not in a container", tab.cookieStoreId);
 
   const fromUrl = opts.fromUrl || tab.url || "";
-  if (!/^https?:/.test(fromUrl)) return null;           // no real page yet -> not typed-over
+  if (!/^https?:/.test(fromUrl)) return skip("no http page in tab yet", fromUrl);
 
   const h = host(target);
-  if (allowlisted(h)) return null;
-  if (cfg.onlyWhenSiteDiffers && site(h) === site(host(fromUrl))) return null;
+  if (allowlisted(h)) return skip("host allowlisted", h);
+  if (cfg.onlyWhenSiteDiffers && site(h) === site(host(fromUrl)))
+    return skip("same site", `${site(host(fromUrl))} -> ${site(h)}`);
 
+  log("BREAK OUT", `${fromUrl} -> ${target}`, `store=${tab.cookieStoreId}`);
   return tab;
 }
 
@@ -182,6 +198,14 @@ async function moveToDefault(tab, url) {
 
 browser.webRequest.onBeforeRequest.addListener(
   (d) => {
+    log("main_frame", d.url, {
+      method: d.method,
+      originUrl: d.originUrl,
+      documentUrl: d.documentUrl,
+      tabId: d.tabId,
+      frameId: d.frameId,
+      mode: cfg.mode,
+    });
     if (cfg.mode !== "preempt") return;
     const pageInitiated = Boolean(d.originUrl || d.documentUrl);
     // Returning a Promise from a blocking listener is supported in Firefox.
@@ -200,6 +224,7 @@ browser.webRequest.onBeforeRequest.addListener(
 const TYPED_TRANSITIONS = new Set(["typed", "generated", "keyword", "keyword_generated"]);
 
 browser.webNavigation.onCommitted.addListener(async (d) => {
+  if (d.frameId === 0) log("committed", d.url, "transitionType=" + d.transitionType, d.transitionQualifiers);
   if (cfg.mode !== "commit") return;
   if (d.frameId !== 0) return;
   if (!TYPED_TRANSITIONS.has(d.transitionType)) return;
