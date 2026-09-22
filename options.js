@@ -5,7 +5,8 @@ const D = {
   hostAllowlist: [],
   onlyWhenSiteDiffers: true,
   newTabGraceMs: 2000,
-  startupGraceMs: 20000,
+  startupGraceMs: 5000,
+  debug: false,
 };
 const $ = (id) => document.getElementById(id);
 
@@ -17,6 +18,7 @@ browser.storage.local.get("cfg").then(({ cfg }) => {
   $("hostAllowlist").value = c.hostAllowlist.join("\n");
   $("newTabGraceMs").value = c.newTabGraceMs;
   $("startupGraceMs").value = c.startupGraceMs;
+  $("debug").checked = c.debug;
 });
 
 $("save").addEventListener("click", async () => {
@@ -27,6 +29,7 @@ $("save").addEventListener("click", async () => {
     hostAllowlist: $("hostAllowlist").value.split(/\s+/).map((s) => s.trim()).filter(Boolean),
     newTabGraceMs: Number($("newTabGraceMs").value) || 0,
     startupGraceMs: Number($("startupGraceMs").value) || 0,
+    debug: $("debug").checked,
   };
   await browser.storage.local.set({ cfg });
   $("saved").textContent = "saved";

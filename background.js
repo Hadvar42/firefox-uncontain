@@ -43,10 +43,12 @@ const DEFAULTS = {
 
   // Ignore everything for this long after browser/extension start, so session
   // restore does not get scattered across the default container.
-  startupGraceMs: 3000,
+  // Kept short on purpose: restored tabs are additionally protected by
+  // newTabGraceMs, because tabs.onCreated fires for them during session restore.
+  startupGraceMs: 5000,
 
   // Verbose logging to the extension console (about:debugging -> Inspect).
-  debug: true,
+  debug: false,
 };
 
 let cfg = { ...DEFAULTS };
