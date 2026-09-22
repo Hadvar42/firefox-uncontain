@@ -4,6 +4,7 @@ const D = {
   keepOriginalTab: true,
   hostAllowlist: [],
   onlyWhenSiteDiffers: true,
+  arbitrationDelayMs: 700,
   newTabGraceMs: 2000,
   startupGraceMs: 5000,
   debug: false,
@@ -16,6 +17,7 @@ browser.storage.local.get("cfg").then(({ cfg }) => {
   $("keepOriginalTab").checked = c.keepOriginalTab;
   $("onlyWhenSiteDiffers").checked = c.onlyWhenSiteDiffers;
   $("hostAllowlist").value = c.hostAllowlist.join("\n");
+  $("arbitrationDelayMs").value = c.arbitrationDelayMs;
   $("newTabGraceMs").value = c.newTabGraceMs;
   $("startupGraceMs").value = c.startupGraceMs;
   $("debug").checked = c.debug;
@@ -27,6 +29,7 @@ $("save").addEventListener("click", async () => {
     keepOriginalTab: $("keepOriginalTab").checked,
     onlyWhenSiteDiffers: $("onlyWhenSiteDiffers").checked,
     hostAllowlist: $("hostAllowlist").value.split(/\s+/).map((s) => s.trim()).filter(Boolean),
+    arbitrationDelayMs: Number($("arbitrationDelayMs").value) || 0,
     newTabGraceMs: Number($("newTabGraceMs").value) || 0,
     startupGraceMs: Number($("startupGraceMs").value) || 0,
     debug: $("debug").checked,

@@ -36,6 +36,12 @@ const DEFAULTS = {
   // Multi-Account Containers site assignments.
   onlyWhenSiteDiffers: true,
 
+  // Grace window before we open our own default-container tab. If another
+  // extension (Container Redirect, Multi-Account Containers, ...) has a rule for
+  // the typed URL, it opens the tab itself within this window and we stand down,
+  // so you get one tab in the right container instead of two. 0 disables this.
+  arbitrationDelayMs: 700,
+
   // Ignore container tabs younger than this (ms). Prevents ping-pong with
   // Multi-Account Containers, which reopens assigned sites in a *fresh* tab
   // (also without originUrl).
@@ -75,16 +81,22 @@ const tabBorn = new Map();          // tabId -> timestamp
 const tabSeen = new Map();          // tabId -> Set(url)  (for reload / back-forward)
 const tabPrevUrl = new Map();       // tabId -> url committed before the current one
 
-browser.tabs.onCreated.addListener((tab) => tabBorn.set(tab.id, Date.now()));
+browser.tabs.onCreated.addListener((tab) => {
+  tabBorn.set(tab.id, Date.now());
+  const u = tab.url && tab.url !== "about:blank" ? tab.url : tab.pendingUrl;
+  if (u && /^https?:/.test(u)) noteForeignNavigation(u, tab.id);
+});
 browser.tabs.onRemoved.addListener((id) => {
   tabBorn.delete(id);
   tabSeen.delete(id);
   tabPrevUrl.delete(id);
+  ourTabs.delete(id);
 });
 
 // Registered first on purpose: bookkeeping runs before the "commit" mode handler.
 browser.webNavigation.onCommitted.addListener((d) => {
   if (d.frameId !== 0) return;
+  noteForeignNavigation(d.url, d.tabId);
   let seen = tabSeen.get(d.tabId);
   if (!seen) tabSeen.set(d.tabId, (seen = new Set()));
   const cur = stripRef(d.url);
@@ -181,14 +193,55 @@ async function shouldBreakOut(d, pageInitiated, opts = {}) {
   return tab;
 }
 
+/* ---------- arbitration with other container extensions ---------- */
+
+const pending = new Map();   // url -> { timerId, sourceTabId }
+const ourTabs = new Set();   // tabs we created ourselves
+
+// Called whenever any tab starts or commits a navigation. If it matches a
+// break-out we have armed, somebody else got there first: abort ours.
+function noteForeignNavigation(url, tabId) {
+  const key = stripRef(url);
+  const p = pending.get(key);
+  if (!p) return;
+  if (ourTabs.has(tabId)) return;
+  clearTimeout(p.timerId);
+  pending.delete(key);
+  log("stand down, another extension opened", key, "tabId=" + tabId);
+}
+
+function scheduleMoveToDefault(tab, url) {
+  const key = stripRef(url);
+  if (pending.has(key)) return;
+
+  const delay = Math.max(0, Number(cfg.arbitrationDelayMs) || 0);
+  if (delay === 0) {
+    moveToDefault(tab, url);
+    return;
+  }
+  const timerId = setTimeout(() => {
+    pending.delete(key);
+    moveToDefault(tab, url);
+  }, delay);
+  pending.set(key, { timerId, sourceTabId: tab.id });
+  log("break-out armed", key, delay + "ms");
+}
+
 async function moveToDefault(tab, url) {
-  await browser.tabs.create({
-    url,
-    cookieStoreId: DEFAULT_STORE,
-    windowId: tab.windowId,
-    index: tab.index + 1,
-    active: true,
-  });
+  let created;
+  try {
+    created = await browser.tabs.create({
+      url,
+      cookieStoreId: DEFAULT_STORE,
+      windowId: tab.windowId,
+      index: tab.index + 1,
+      active: true,
+    });
+    ourTabs.add(created.id);
+  } catch (e) {
+    log("tabs.create failed", String(e));
+    return;
+  }
   if (!cfg.keepOriginalTab) {
     try {
       await browser.tabs.remove(tab.id);
@@ -213,7 +266,7 @@ browser.webRequest.onBeforeRequest.addListener(
     // Returning a Promise from a blocking listener is supported in Firefox.
     return shouldBreakOut(d, pageInitiated).then((tab) => {
       if (!tab) return {};
-      moveToDefault(tab, d.url);
+      scheduleMoveToDefault(tab, d.url);
       return { cancel: true };
     });
   },
@@ -241,5 +294,5 @@ browser.webNavigation.onCommitted.addListener(async (d) => {
   try {
     await browser.tabs.goBack(tab.id);
   } catch (_) {}
-  moveToDefault(tab, d.url);
+  scheduleMoveToDefault(tab, d.url);
 });
