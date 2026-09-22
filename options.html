@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+ body { font: menu; font-size: 13px; padding: 14px; max-width: 30em; }
+ h1 { font-size: 15px; margin: 0 0 10px; }
+ label { display: block; margin: 9px 0; }
+ textarea { width: 100%; height: 5em; }
+ .hint { color: #666; font-size: 12px; margin: 2px 0 10px 22px; }
+ button { margin-top: 12px; }
+ #saved { color: #0a0; margin-left: 8px; }
+</style>
+</head>
+<body>
+<h1>Uncontain</h1>
+
+<label>Mode:
+  <select id="mode">
+    <option value="preempt">Preempt – cancel before the container loads anything (recommended)</option>
+    <option value="commit">Commit – use navigation transition type (fallback)</option>
+  </select>
+</label>
+
+<label><input type="checkbox" id="onlyWhenSiteDiffers"> Only break out when the typed site differs from the current one</label>
+<div class="hint">Typing another URL of the same site stays in the container.</div>
+
+<label><input type="checkbox" id="keepOriginalTab"> Keep the container tab open</label>
+<div class="hint">Off: the container tab closes once the new tab opens.</div>
+
+<label>Never break out of a container for these hosts (one per line, subdomains included):
+  <textarea id="hostAllowlist" placeholder="intranet.example.com&#10;login.microsoftonline.com"></textarea>
+</label>
+
+<label>New-tab grace period (ms): <input type="number" id="newTabGraceMs" min="0" step="250" style="width:7em"></label>
+<label>Startup grace period (ms): <input type="number" id="startupGraceMs" min="0" step="1000" style="width:7em"></label>
+
+<button id="save">Save</button><span id="saved"></span>
+
+<script src="options.js"></script>
+</body>
+</html>

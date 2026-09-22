@@ -1,0 +1,24 @@
+{
+  "manifest_version": 2,
+  "name": "Uncontain: typed URLs leave the container",
+  "version": "1.0.0",
+  "author": "Hadvar42",
+  "description": "URLs you type in the address bar open in the default (no) container. Links, redirects and payment handovers stay inside the current container.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "uncontain@hadvar42.github.io",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": [
+    "tabs",
+    "cookies",
+    "webRequest",
+    "webRequestBlocking",
+    "webNavigation",
+    "storage",
+    "<all_urls>"
+  ],
+  "background": { "scripts": ["background.js"] },
+  "options_ui": { "page": "options.html", "open_in_tab": false }
+}
